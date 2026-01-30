@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Burrow - Premium Minecraft Emporium</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400 ;600;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
             --pink-primary: #ff69b4;
@@ -1889,10 +1889,56 @@
         let currentChat = null;
         let currentSupportUser = null;
 
+        // ADDED: Cross-tab synchronization for items persistence
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'burrowItems') {
+                try {
+                    const newItems = JSON.parse(e.newValue);
+                    if (newItems) {
+                        items = newItems;
+                        renderItems();
+                    }
+                } catch (err) {
+                    console.error('Error syncing items from storage:', err);
+                }
+            }
+            if (e.key === 'burrowSubmittedOrders') {
+                try {
+                    submittedOrders = JSON.parse(e.newValue) || [];
+                    if (currentUser === 'HO121' || currentUser === 'mod121') {
+                        renderAdminOrders();
+                    }
+                } catch (err) {
+                    console.error('Error syncing orders:', err);
+                }
+            }
+        });
+
+        // ADDED: Force refresh from localStorage on load to ensure data persistence across browsers/sessions
+        function syncFromStorage() {
+            try {
+                const storedItems = localStorage.getItem('burrowItems');
+                if (storedItems) {
+                    items = JSON.parse(storedItems);
+                }
+                const storedOrders = localStorage.getItem('burrowSubmittedOrders');
+                if (storedOrders) {
+                    submittedOrders = JSON.parse(storedOrders);
+                }
+                const storedUsers = localStorage.getItem('burrowAllUsers');
+                if (storedUsers) {
+                    allUsers = JSON.parse(storedUsers);
+                }
+            } catch (e) {
+                console.error('Storage sync error:', e);
+            }
+        }
+
         /* INITIALIZATION */
         window.onload = () => {
             createParticles();
             setupEventListeners();
+            syncFromStorage(); // ADDED: Ensure fresh data from storage before rendering
             checkMaintenanceMode();
             checkAnnouncement();
             if (currentUser) restoreLogin();
@@ -2348,7 +2394,14 @@
             
             const newItem = { id: Date.now(), name, type, location: null, price, stock };
             items.push(newItem);
-            localStorage.setItem('burrowItems', JSON.stringify(items));
+            
+            // ADDED: Error handling for localStorage to ensure data persists
+            try {
+                localStorage.setItem('burrowItems', JSON.stringify(items));
+            } catch (e) {
+                console.error('Failed to save items:', e);
+                showToast('Warning: Item added to page but may not persist due to storage error', 'error');
+            }
             
             document.getElementById('itemName').value = '';
             document.getElementById('itemPrice').value = '';
@@ -2362,7 +2415,14 @@
             if (!confirm('Delete this item from the shop?')) return;
             
             items = items.filter(i => i.id !== id);
-            localStorage.setItem('burrowItems', JSON.stringify(items));
+            
+            // ADDED: Error handling for deletion
+            try {
+                localStorage.setItem('burrowItems', JSON.stringify(items));
+            } catch (e) {
+                console.error('Failed to delete item:', e);
+            }
+            
             renderItems();
             showToast('Item removed from shop', 'success');
         }
@@ -2373,7 +2433,14 @@
             if (!item) return;
             
             item.stock = newStock;
-            localStorage.setItem('burrowItems', JSON.stringify(items));
+            
+            // ADDED: Error handling for stock update
+            try {
+                localStorage.setItem('burrowItems', JSON.stringify(items));
+            } catch (e) {
+                console.error('Failed to update stock:', e);
+            }
+            
             renderItems();
             showToast(`Stock updated to ${newStock}`, 'success');
         }
@@ -2664,7 +2731,15 @@
             };
             
             submittedOrders.push(order);
-            localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            
+            // ADDED: Error handling for order submission
+            try {
+                localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            } catch (e) {
+                console.error('Failed to save order:', e);
+                showToast('Error saving order', 'error');
+                return;
+            }
             
             userBulkOrder = [];
             localStorage.setItem('burrowBulkOrder', JSON.stringify(userBulkOrder));
@@ -2776,15 +2851,29 @@
             
             const logEntry = { ...order, action: 'confirmed', timestamp: order.completedAt, performedBy: currentUser };
             orderLogs.push(logEntry);
-            localStorage.setItem('burrowOrderLogs', JSON.stringify(orderLogs));
+            
+            // ADDED: Error handling for logs
+            try {
+                localStorage.setItem('burrowOrderLogs', JSON.stringify(orderLogs));
+            } catch (e) {
+                console.error('Failed to save order log:', e);
+            }
             
             bulkOrderLogs.push({ ...order, confirmedAt: order.completedAt, confirmedBy: currentUser });
-            localStorage.setItem('burrowBulkLogs', JSON.stringify(bulkOrderLogs));
             
-            localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            try {
+                localStorage.setItem('burrowBulkLogs', JSON.stringify(bulkOrderLogs));
+            } catch (e) {
+                console.error('Failed to save bulk log:', e);
+            }
             
             submittedOrders.splice(orderIndex, 1);
-            localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            
+            try {
+                localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            } catch (e) {
+                console.error('Failed to update orders:', e);
+            }
             
             renderAdminOrders();
             renderBulkLogs();
@@ -2869,10 +2958,20 @@
             
             const logEntry = { action: 'cleared', timestamp: new Date().toISOString(), performedBy: currentUser, orderCount: submittedOrders.length };
             orderLogs.push(logEntry);
-            localStorage.setItem('burrowOrderLogs', JSON.stringify(orderLogs));
+            
+            try {
+                localStorage.setItem('burrowOrderLogs', JSON.stringify(orderLogs));
+            } catch (e) {
+                console.error('Failed to save log:', e);
+            }
             
             submittedOrders = [];
-            localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            
+            try {
+                localStorage.setItem('burrowSubmittedOrders', JSON.stringify(submittedOrders));
+            } catch (e) {
+                console.error('Failed to clear orders:', e);
+            }
             
             renderAdminOrders();
             renderOrderLogs();
@@ -2939,7 +3038,14 @@
             };
             
             globalMessages.push(msg);
-            localStorage.setItem('burrowGlobalChat', JSON.stringify(globalMessages));
+            
+            // ADDED: Error handling for chat
+            try {
+                localStorage.setItem('burrowGlobalChat', JSON.stringify(globalMessages));
+            } catch (e) {
+                console.error('Failed to save chat:', e);
+            }
+            
             input.value = '';
             renderGlobalMessages();
             scrollToBottom('globalMessages');
@@ -2963,7 +3069,13 @@
             
             if (!supportChats[currentSupportUser]) supportChats[currentSupportUser] = [];
             supportChats[currentSupportUser].push(msg);
-            localStorage.setItem('burrowSupportChats', JSON.stringify(supportChats));
+            
+            try {
+                localStorage.setItem('burrowSupportChats', JSON.stringify(supportChats));
+            } catch (e) {
+                console.error('Failed to save support chat:', e);
+            }
+            
             input.value = '';
             renderSupportMessages();
             scrollToBottom('supportMessages');
